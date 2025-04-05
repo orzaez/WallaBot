@@ -57,7 +57,7 @@ def notel(chat_id, price, title, url_item, obs=None):
 
 def get_url_list(search):
     url = URL_ITEMS
-    url += '?keywords='
+    url += '&keywords='
     url += "+".join(search.kws.split(" "))
     url += '&time_filter=today'
     if search.cat_ids is not None:
