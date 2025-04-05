@@ -16,7 +16,7 @@ import locale
 
 TOKEN = os.getenv("BOT_TOKEN", "Bot Token does not exist")
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
-URL_ITEMS = "https://api.wallapop.com/api/v3/general/search"
+URL_ITEMS = "https://api.wallapop.com/api/v3/search?source=search_box"
 PROFILE = os.getenv("PROFILE")
 
 if PROFILE is None:
@@ -79,33 +79,61 @@ def get_url_list(search):
 
 def get_items(url, chat_id):
     try:
-        resp = requests.get(url=url)
-        data = resp.json()
-        # print(data)
-        for x in data['search_objects']:
-            # print('\t'.join((datetime.datetime.today().strftime('%Y-%m-%d %H:%M'),
-            #                  str(x['id']), str(x['price']), x['title'], x['user']['id'])))
-            # logging.info('\t'.join((str(x['id']), str(x['price']), x['title'], x['user']['id'])))
-            logging.info('Encontrado: id=%s, price=%s, title=%s, user=%s',str(x['id']), locale.currency(x['price'], grouping=True), x['title'], x['user']['id'])
-            i = db.search_item(x['id'], chat_id)
-            if i is None:
-                db.add_item(x['id'], chat_id, x['title'], x['price'], x['web_slug'], x['user']['id'])
-                notel(chat_id, x['price'], x['title'], x['web_slug'])
-                logging.info('New: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price'], grouping=True), x['title'])
-            else:
-                # Si está comparar precio...
-                money = str(x['price'])
-                value_json = Decimal(sub(r'[^\d.]', '', money))
-                value_db = Decimal(sub(r'[^\d.]', '', i.price))
-                if value_json < value_db:
-                    new_obs = locale.currency(i.price, grouping=True)
-                    if i.observaciones is not None:
-                        new_obs += ' < '
-                        new_obs += i.observaciones
-                    db.update_item(x['id'], money, new_obs)
-                    obs = ' < ' + new_obs
-                    notel(chat_id, x['price'], x['title'], x['web_slug'], obs)
-                    logging.info('Baja: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price'], grouping=True), x['title'])
+   
+        ua = UserAgent()
+
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'es,ru;q=0.9,en;q=0.8,de;q=0.7,pt;q=0.6',
+            'Connection': 'keep-alive',
+            'DeviceOS': '0',
+            'Origin': 'https://es.wallapop.com',
+            'Referer': 'https://es.wallapop.com/',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-site',
+            'User-Agent': f'{ua.random}',
+            'X-AppVersion': '75491',
+            'X-DeviceOS': '0',
+            'sec-ch-ua-mobile': '?0',
+        }
+
+        response = requests.get(url=url, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+
+            items = data.get('data', {}).get('section', {}).get('payload', {}).get('items', [])
+
+            for x in items:
+                logging.info('Encontrado: id=%s, price=%s, title=%s, user=%s',
+                             str(x['id']),
+                             locale.currency(x['price']['amount'], grouping=True),
+                             x['title'],
+                             x['user_id'])
+
+                i = db.search_item(x['id'], chat_id)
+                
+                if i is None:
+                    db.add_item(x['id'], chat_id, x['title'], x['price']['amount'], x['web_slug'], x['user_id'])
+                    notel(chat_id, x['price']['amount'], x['title'], x['web_slug'])
+                    logging.info('New: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price']['amount'], grouping=True), x['title'])
+                else:
+                    money = str(x['price']['amount'])
+                    value_json = Decimal(sub(r'[^\d.]', '', money))
+                    value_db = Decimal(sub(r'[^\d.]', '', i.price))
+                    
+                    if value_json < value_db:
+                        new_obs = locale.currency(i.price, grouping=True)
+                        if i.observaciones is not None:
+                            new_obs += ' < ' + i.observaciones
+                        db.update_item(x['id'], money, new_obs)
+                        obs = ' < ' + new_obs
+                        notel(chat_id, x['price']['amount'], x['title'], x['web_slug'], obs)
+                        logging.info('Baja: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price']['amount'], grouping=True), x['title'])
+        else:
+            logging.error(f"Failed to fetch data: {response.status_code}")
+
     except Exception as e:
         logging.error(e)
 
