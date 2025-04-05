@@ -13,6 +13,7 @@ import sys
 import threading
 import os
 import locale
+from fake_useragent import UserAgent
 
 TOKEN = os.getenv("BOT_TOKEN", "Bot Token does not exist")
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
