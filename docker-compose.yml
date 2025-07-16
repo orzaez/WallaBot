@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  wallabot:
+    build: .
+    container_name: wallabot
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PROFILE=production
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3" 

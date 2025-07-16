@@ -205,3 +205,137 @@ class DBHelper:
             self.conn.commit()
         except Exception as e:
             print(e)
+
+    # Métodos para estadísticas
+    def get_search_statistics(self, chat_id, search_kws=None):
+        """
+        Obtiene estadísticas para una búsqueda específica o todas las búsquedas del usuario
+        """
+        if search_kws:
+            # Estadísticas para una búsqueda específica
+            stmt = """
+                SELECT 
+                    COUNT(*) as total_items,
+                    MIN(CAST(price as REAL)) as min_price,
+                    MAX(CAST(price as REAL)) as max_price,
+                    AVG(CAST(price as REAL)) as avg_price,
+                    COUNT(DISTINCT user) as unique_sellers
+                FROM item 
+                WHERE chatId = ? AND itemId IN (
+                    SELECT DISTINCT itemId FROM item i2
+                    JOIN chat_search cs ON i2.chatId = cs.chat_id 
+                    WHERE cs.kws = ? AND cs.active = 1
+                )
+            """
+            args = (chat_id, search_kws)
+        else:
+            # Estadísticas generales para el usuario
+            stmt = """
+                SELECT 
+                    COUNT(*) as total_items,
+                    MIN(CAST(price as REAL)) as min_price,
+                    MAX(CAST(price as REAL)) as max_price,
+                    AVG(CAST(price as REAL)) as avg_price,
+                    COUNT(DISTINCT user) as unique_sellers
+                FROM item 
+                WHERE chatId = ?
+            """
+            args = (chat_id,)
+        
+        try:
+            result = self.conn.execute(stmt, args).fetchone()
+            return {
+                'total_items': result[0] if result[0] else 0,
+                'min_price': result[1] if result[1] else 0,
+                'max_price': result[2] if result[2] else 0,
+                'avg_price': result[3] if result[3] else 0,
+                'unique_sellers': result[4] if result[4] else 0
+            }
+        except Exception as e:
+            print(f"Error en get_search_statistics: {e}")
+            return {
+                'total_items': 0,
+                'min_price': 0,
+                'max_price': 0,
+                'avg_price': 0,
+                'unique_sellers': 0
+            }
+
+    def get_items_by_search(self, chat_id, search_kws):
+        """
+        Obtiene items para una búsqueda específica
+        """
+        stmt = """
+            SELECT i.itemId, i.title, i.price, i.url, i.user, i.observaciones
+            FROM item i
+            WHERE i.chatId = ?
+            ORDER BY CAST(i.price as REAL) ASC
+        """
+        items = []
+        try:
+            for row in self.conn.execute(stmt, (chat_id,)):
+                items.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'price': float(row[2]) if row[2] else 0,
+                    'url': row[3],
+                    'user': row[4],
+                    'price_changes': row[5] if row[5] else None
+                })
+        except Exception as e:
+            print(f"Error en get_items_by_search: {e}")
+        return items
+
+    def get_search_activity_stats(self, chat_id):
+        """
+        Obtiene estadísticas de actividad por búsqueda
+        """
+        stmt = """
+            SELECT 
+                cs.kws,
+                COUNT(i.itemId) as items_found,
+                MIN(CAST(i.price as REAL)) as min_price,
+                MAX(CAST(i.price as REAL)) as max_price,
+                AVG(CAST(i.price as REAL)) as avg_price,
+                COUNT(CASE WHEN i.observaciones IS NOT NULL THEN 1 END) as price_drops
+            FROM chat_search cs
+            LEFT JOIN item i ON cs.chat_id = i.chatId
+            WHERE cs.chat_id = ? AND cs.active = 1
+            GROUP BY cs.kws
+            ORDER BY items_found DESC
+        """
+        
+        searches = []
+        try:
+            for row in self.conn.execute(stmt, (chat_id,)):
+                searches.append({
+                    'search_term': row[0],
+                    'items_found': row[1] if row[1] else 0,
+                    'min_price': row[2] if row[2] else 0,
+                    'max_price': row[3] if row[3] else 0,
+                    'avg_price': row[4] if row[4] else 0,
+                    'price_drops': row[5] if row[5] else 0
+                })
+        except Exception as e:
+            print(f"Error en get_search_activity_stats: {e}")
+        return searches
+
+    def get_recent_activity(self, chat_id, hours=24):
+        """
+        Obtiene actividad reciente (últimas X horas)
+        """
+        import time
+        cutoff_time = int(time.time() * 1000) - (hours * 60 * 60 * 1000)
+        
+        stmt = """
+            SELECT COUNT(*) as recent_items
+            FROM item 
+            WHERE chatId = ? AND publishDate > ?
+        """
+        
+        try:
+            result = self.conn.execute(stmt, (chat_id, cutoff_time)).fetchone()
+            return result[0] if result[0] else 0
+        except Exception as e:
+            print(f"Error en get_recent_activity: {e}")
+            return 0
