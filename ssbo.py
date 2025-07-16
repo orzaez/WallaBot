@@ -35,174 +35,40 @@ ICON_EXCLAMATION = u'\U00002757'  # ❗
 ICON_DIRECT_HIT_ = u'\U0001F3AF'  # 🎯
 
 
-def notel(chat_id, price, title, url_item, obs=None, item_data=None):
-    """
-    Envía notificación mejorada con más información del producto
-    item_data debe contener: user_id, description, images, location, condition, etc.
-    """
-    # Crear separador visual
-    separator = "─" * 25
-    
+def notel(chat_id, price, title, url_item, obs=None, user_id=None):
     # Determinar el tipo de notificación
     if obs is not None:
         # Es una bajada de precio
-        icon = "📉"
-        header = f"{icon} *¡BAJADA DE PRECIO!* {icon}"
-        price_info = f"💰 *Precio actual:* {locale.currency(price, grouping=True)}\n📊 *Precio anterior:* {obs}"
-        save_amount = ""
-        try:
-            # Calcular ahorro si es posible
-            prev_price = float(obs.replace('€', '').replace(',', '').strip())
-            savings = prev_price - price
-            if savings > 0:
-                save_amount = f"\n💸 *¡Ahorras:* {locale.currency(savings, grouping=True)}!"
-        except:
-            pass
-        price_info += save_amount
+        text = f"📉 *¡BAJADA DE PRECIO!*\n\n"
+        text += f"🏷️ *{title}*\n\n"
+        text += f"💰 *Precio actual:* {locale.currency(price, grouping=True)}\n"
+        text += f"📊 *Precio anterior:* {obs}\n\n"
+        text += f"💡 *¡Ahorra dinero con esta oferta!*"
     else:
         # Es un producto nuevo
-        icon = "🆕"
-        header = f"{icon} *¡PRODUCTO NUEVO!* {icon}"
-        price_info = f"💰 *Precio:* {locale.currency(price, grouping=True)}"
+        text = f"🆕 *¡PRODUCTO NUEVO!*\n\n"
+        text += f"🏷️ *{title}*\n\n"
+        text += f"💰 *Precio:* {locale.currency(price, grouping=True)}\n"
+        if user_id:
+            text += f"👤 *Vendedor ID:* {user_id}\n"
+        text += f"\n🎯 *¡Nuevo producto encontrado para ti!*"
     
-    # Construir mensaje principal
-    text = f"{header}\n{separator}\n\n"
-    text += f"🏷️ *{title}*\n\n"
-    text += f"{price_info}\n\n"
+    text += f"\n\n🔗 *Ver en Wallapop:*\n"
+    text += f"https://es.wallapop.com/item/{url_item}"
     
-    # Añadir información adicional si está disponible
-    if item_data:
-        # Información del vendedor
-        if item_data.get('seller_name'):
-            text += f"👤 *Vendedor:* {item_data['seller_name']}"
-            # Añadir rating si está disponible
-            if item_data.get('seller_rating'):
-                stars = "⭐" * int(float(item_data['seller_rating']))
-                text += f" {stars} ({item_data['seller_rating']})"
-            text += "\n"
-        elif item_data.get('user_id'):
-            text += f"👤 *Vendedor ID:* {item_data['user_id']}\n"
-        
-        # Ubicación
-        if item_data.get('location'):
-            text += f"📍 *Ubicación:* {item_data['location']}\n"
-        
-        # Estado del producto
-        if item_data.get('condition'):
-            condition_emoji = {
-                'new': '🆕',
-                'as_good_as_new': '✨', 
-                'good': '👍',
-                'fair': '👌',
-                'poor': '⚠️'
-            }
-            condition_text = {
-                'new': 'Nuevo',
-                'as_good_as_new': 'Como nuevo',
-                'good': 'Buen estado',
-                'fair': 'Estado aceptable', 
-                'poor': 'Para reparar'
-            }
-            emoji = condition_emoji.get(item_data['condition'], '❓')
-            cond_text = condition_text.get(item_data['condition'], item_data['condition'])
-            text += f"🔧 *Estado:* {emoji} {cond_text}\n"
-        
-        # Descripción (limitada)
-        if item_data.get('description') and len(item_data['description'].strip()) > 0:
-            desc = item_data['description'][:150]
-            if len(item_data['description']) > 150:
-                desc += "..."
-            text += f"\n📝 *Descripción:*\n_{desc}_\n"
-        
-        # Información de categoría
-        if item_data.get('category'):
-            text += f"🗂️ *Categoría:* {item_data['category']}\n"
-        
-        # Fecha de publicación
-        if item_data.get('publish_date'):
-            try:
-                from datetime import datetime
-                timestamp = int(item_data['publish_date']) / 1000
-                date_obj = datetime.fromtimestamp(timestamp)
-                formatted_date = date_obj.strftime("%d/%m/%Y %H:%M")
-                text += f"📅 *Publicado:* {formatted_date}\n"
-            except:
-                pass
-    
-    text += f"\n{separator}\n"
-    
-    # Añadir call-to-action según el tipo
-    if obs is not None:
-        text += "💡 *¡Precio rebajado! No dejes pasar esta oportunidad!*"
-    else:
-        text += "🎯 *¡Producto recién encontrado para ti!*"
-    
-    # Crear botones inline mejorados
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-    
-    # Botón principal para ver el producto
-    view_btn = types.InlineKeyboardButton(
-        "👀 Ver en Wallapop", 
-        url=f"https://es.wallapop.com/item/{url_item}"
-    )
+    # Crear botón inline para ir al producto
+    keyboard = types.InlineKeyboardMarkup()
+    view_btn = types.InlineKeyboardButton("👀 Ver producto en Wallapop", url=f"https://es.wallapop.com/item/{url_item}")
     keyboard.add(view_btn)
     
-    # Botón para contactar vendedor (si tenemos la información)
-    if item_data and item_data.get('user_id'):
-        contact_btn = types.InlineKeyboardButton(
-            "💬 Contactar vendedor",
-            url=f"https://es.wallapop.com/user/{item_data['user_id']}"
-        )
-        keyboard.add(contact_btn)
-    
-    # Botón para compartir
-    share_text = f"¡Mira este {title} por {locale.currency(price, grouping=True)}!"
-    share_url = f"https://t.me/share/url?url=https://es.wallapop.com/item/{url_item}&text={share_text}"
-    share_btn = types.InlineKeyboardButton("📤 Compartir", url=share_url)
-    keyboard.add(share_btn)
-    
     try:
-        # Intentar enviar con imagen si está disponible
-        if item_data and item_data.get('main_image'):
-            try:
-                bot.send_photo(
-                    chat_id, 
-                    item_data['main_image'],
-                    caption=text,
-                    parse_mode='Markdown',
-                    reply_markup=keyboard
-                )
-                logging.info(f"Notificación con imagen enviada a {chat_id}: {title}")
-                return
-            except Exception as img_error:
-                logging.warning(f"No se pudo enviar imagen, enviando solo texto: {img_error}")
-        
-        # Enviar solo texto si no hay imagen o falla
-        bot.send_message(
-            chat_id, 
-            text, 
-            parse_mode='Markdown', 
-            reply_markup=keyboard, 
-            disable_web_page_preview=False
-        )
+        bot.send_message(chat_id, text, parse_mode='Markdown', reply_markup=keyboard, disable_web_page_preview=False)
         logging.info(f"Notificación enviada a {chat_id}: {title}")
-        
     except Exception as e:
         logging.error(f"Error enviando notificación: {e}")
-        # Fallback simplificado si hay error con Markdown
-        try:
-            simple_text = f"{'📉 BAJADA DE PRECIO' if obs else '🆕 NUEVO PRODUCTO'}\n\n"
-            simple_text += f"{title}\n"
-            simple_text += f"Precio: {locale.currency(price, grouping=True)}\n"
-            if obs:
-                simple_text += f"Antes: {obs}\n"
-            simple_text += f"\nVer: https://es.wallapop.com/item/{url_item}"
-            
-            bot.send_message(chat_id, simple_text)
-        except:
-            # Último recurso usando requests directo
-            urlz0rb0t = URL + "sendMessage?chat_id=%s&text=%s" % (chat_id, simple_text)
-            requests.get(url=urlz0rb0t)
+        # Fallback sin botones si hay error
+        urlz0rb0t = URL + "sendMessage?chat_id=%s&parse_mode=markdown&text=%s" % (chat_id, text)
+        requests.get(url=urlz0rb0t)
 
 
 def get_url_list(search):
@@ -263,64 +129,13 @@ def get_items(url, chat_id):
                              x['title'],
                              x['user_id'])
 
-                # Extraer información adicional del producto
-                item_data = {
-                    'user_id': x.get('user_id'),
-                    'seller_name': None,
-                    'seller_rating': None,
-                    'location': None,
-                    'condition': None,
-                    'description': x.get('description', ''),
-                    'category': None,
-                    'main_image': None,
-                    'publish_date': x.get('publish_date')
-                }
-                
-                # Información del vendedor
-                if 'user' in x and isinstance(x['user'], dict):
-                    item_data['seller_name'] = x['user'].get('name')
-                    item_data['seller_rating'] = x['user'].get('scoring', {}).get('value')
-                
-                # Ubicación
-                if 'user' in x and 'location' in x['user']:
-                    location_parts = []
-                    if x['user']['location'].get('city'):
-                        location_parts.append(x['user']['location']['city'])
-                    if x['user']['location'].get('region'):
-                        location_parts.append(x['user']['location']['region'])
-                    if location_parts:
-                        item_data['location'] = ', '.join(location_parts)
-                
-                # Estado del producto
-                if 'condition' in x:
-                    item_data['condition'] = x['condition']
-                
-                # Categoría
-                if 'category' in x:
-                    item_data['category'] = x['category'].get('name', '')
-                
-                # Imagen principal
-                if 'images' in x and x['images'] and len(x['images']) > 0:
-                    # Tomar la primera imagen disponible
-                    first_image = x['images'][0]
-                    if 'medium' in first_image:
-                        item_data['main_image'] = first_image['medium']
-                    elif 'small' in first_image:
-                        item_data['main_image'] = first_image['small']
-                    elif 'large' in first_image:
-                        item_data['main_image'] = first_image['large']
-                
-                # Verificar si el item ya existe en la base de datos
                 i = db.search_item(x['id'], chat_id)
                 
                 if i is None:
-                    # Establecer fecha actual como publishDate si no viene en la respuesta
-                    publish_date = x.get('publish_date')
-                    if not publish_date:
-                        publish_date = int(time.time() * 1000)
-                    
-                    db.add_item(x['id'], chat_id, x['title'], x['price']['amount'], x['web_slug'], x['user_id'], publish_date)
-                    notel(chat_id, x['price']['amount'], x['title'], x['web_slug'], None, item_data)
+                    # Establecer fecha actual como publishDate
+                    current_time = int(time.time() * 1000)
+                    db.add_item(x['id'], chat_id, x['title'], x['price']['amount'], x['web_slug'], x['user_id'], current_time)
+                    notel(chat_id, x['price']['amount'], x['title'], x['web_slug'], None, x['user_id'])
                     logging.info('New: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price']['amount'], grouping=True), x['title'])
                 else:
                     money = str(x['price']['amount'])
@@ -333,7 +148,7 @@ def get_items(url, chat_id):
                             new_obs += ' < ' + i.observaciones
                         db.update_item(x['id'], money, new_obs)
                         obs = new_obs  # Pasar el precio anterior completo
-                        notel(chat_id, x['price']['amount'], x['title'], x['web_slug'], obs, item_data)
+                        notel(chat_id, x['price']['amount'], x['title'], x['web_slug'], obs, x['user_id'])
                         logging.info('Baja: id=%s, price=%s, title=%s', str(x['id']), locale.currency(x['price']['amount'], grouping=True), x['title'])
         else:
             logging.error(f"Failed to fetch data: {response.status_code}")
